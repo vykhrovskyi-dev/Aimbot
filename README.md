@@ -1,6 +1,6 @@
 local circle = Drawing.new("Circle")
 circle.Visible = true
-circle.Radius = 150
+circle.Radius = 50
 circle.Color = Color3.fromRGB(255, 0, 0)
 circle.Transparency = 0.5
 circle.Thickness = 2
