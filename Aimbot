@@ -1,5 +1,5 @@
 local teamCheck = false
-local fov = 300
+local fov = 400
 local smoothing = 1
 local autoAttack = false
 
