@@ -17,6 +17,15 @@ FOVring.Transparency = 1
 FOVring.Color = Color3.fromRGB(255, 128, 128)
 FOVring.Position = camera.ViewportSize / 2
 
+-- Новый обработчик ввода для клавиши C
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- не реагировать при вводе в чат
+    if input.KeyCode == Enum.KeyCode.C then
+        autoAttack = not autoAttack
+        print("AutoAttack:", autoAttack)
+    end
+end)
+
 local function getClosest()
     local cameraCFrame = camera.CFrame
     local cameraPosition = cameraCFrame.Position
@@ -65,11 +74,7 @@ local function aimAtTarget(target)
 end
 
 local function handleInput()
-    if UserInputService:IsKeyDown(Enum.KeyCode.Insert) then
-        autoAttack = not autoAttack
-        wait(0.2)
-    end
-    
+    -- Убрана проверка клавиши Insert
     if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
         return true
     end
