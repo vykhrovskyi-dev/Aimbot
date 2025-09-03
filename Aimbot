@@ -64,19 +64,17 @@ local function aimAtTarget(target)
     )
 end
 
-local function handleInput()
-    if UserInputService:IsKeyDown(Enum.KeyCode.C) then
-        autoAttack = not autoAttack
-        wait(0.2)
-    end
-    
-    if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
-        return true
-    end
-    
-    return false
-end
+local UserInputService = game:GetService("UserInputService")
 
+local autoAttack = false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- защита: не реагировать, если ты в чате
+    if input.KeyCode == Enum.KeyCode.C then
+        autoAttack = not autoAttack
+        print("AutoAttack:", autoAttack)
+    end
+end)
 local renderConnection
 renderConnection = RunService.RenderStepped:Connect(function()
     if handleInput() then
