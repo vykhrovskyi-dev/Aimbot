@@ -65,7 +65,7 @@ local function aimAtTarget(target)
 end
 
 local function handleInput()
-    if UserInputService:IsKeyDown(Enum.KeyCode.Insert) then
+    if UserInputService:IsKeyDown(Enum.KeyCode.C) then
         autoAttack = not autoAttack
         wait(0.2)
     end
