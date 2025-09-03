@@ -1,7 +1,8 @@
-local teamCheck = true -- Включена проверка команд
+local teamCheck = true -- Включена проверка команд (только противники)
 local fov = 150
 local smoothing = 1
 local autoAttack = false
+local scriptActive = true -- Флаг активности скрипта
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -20,13 +21,24 @@ FOVring.Position = camera.ViewportSize / 2
 -- Обработчик клавиш
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+    
+    -- Переключение автоатаки по клавише V
     if input.KeyCode == Enum.KeyCode.V then
         autoAttack = not autoAttack
         print("AutoAttack:", autoAttack)
     end
+    
+    -- Отключение скрипта по клавише Delete
+    if input.KeyCode == Enum.KeyCode.Delete then
+        scriptActive = false
+        FOVring:Remove()
+        print("Aimbot отключен")
+    end
 end)
 
 local function getClosest()
+    if not scriptActive then return nil end
+    
     local cameraCFrame = camera.CFrame
     local cameraPosition = cameraCFrame.Position
     local lookVector = cameraCFrame.LookVector
@@ -37,7 +49,7 @@ local function getClosest()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == localPlayer then continue end
         
-        -- Проверка команд (если включена)
+        -- Проверка команд (только противники)
         if teamCheck and player.Team == localPlayer.Team then continue end
         
         local character = player.Character
@@ -49,14 +61,14 @@ local function getClosest()
         if not (humanoid and head) then continue end
         if humanoid.Health <= 0 then continue end
         
-        -- Более точное определение позиции цели
+        -- Проверка видимости цели
         local screenPoint, onScreen = camera:WorldToViewportPoint(head.Position)
         if not onScreen then continue end
         
         local pointOnRay = cameraPosition + lookVector * (head.Position - cameraPosition).Magnitude
         local distance = (head.Position - pointOnRay).Magnitude
         
-        if distance < shortestDistance then
+        if distance < shortestDistance and distance <= fov then
             shortestDistance = distance
             closestPlayer = player
         end
@@ -66,6 +78,7 @@ local function getClosest()
 end
 
 local function aimAtTarget(target)
+    if not scriptActive then return end
     if not target or not target.Character then return end
     
     local head = target.Character:FindFirstChild("Head")
@@ -78,7 +91,10 @@ local function aimAtTarget(target)
     )
 end
 
+-- Основной цикл
 RunService.RenderStepped:Connect(function()
+    if not scriptActive then return end -- Проверка активности скрипта
+    
     FOVring.Position = camera.ViewportSize / 2
     
     local pressed = autoAttack or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
