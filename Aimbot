@@ -1,5 +1,5 @@
 local teamCheck = false
-local fov = 750
+local fov = 300
 local smoothing = 1
 local autoAttack = false
 
@@ -20,7 +20,7 @@ FOVring.Position = camera.ViewportSize / 2
 -- Новый обработчик ввода для клавиши C
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end -- не реагировать при вводе в чат
-    if input.KeyCode == Enum.KeyCode.C then
+    if input.KeyCode == Enum.KeyCode.G then
         autoAttack = not autoAttack
         print("AutoAttack:", autoAttack)
     end
