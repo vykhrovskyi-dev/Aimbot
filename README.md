@@ -74,26 +74,9 @@ local function aimAtTarget(target)
     )
 end
 
+-- Функция всегда возвращает true для наведения сквозь стены
 local function isTargetVisible(target)
-    if not target or not target.Character then return false end
-    
-    local head = target.Character:FindFirstChild("Head")
-    if not head then return false end
-    
-    -- Проверка видимости с помощью Raycast
-    local origin = camera.CFrame.Position
-    local direction = (head.Position - origin).Unit * 1000
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {localPlayer.Character, camera}
-    
-    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
-    
-    if raycastResult and raycastResult.Instance:IsDescendantOf(target.Character) then
-        return true
-    end
-    
-    return false
+    return true
 end
 
 local function handleInput()
@@ -128,7 +111,7 @@ renderConnection = RunService.RenderStepped:Connect(function()
             local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
             local center = camera.ViewportSize / 2
             
-            if (screenPos - center).Magnitude <= fov and isTargetVisible(target) then
+            if (screenPos - center).Magnitude <= fov then
                 aimAtTarget(target)
                 
                 -- Зажимаем ЛКМ для атаки
@@ -137,7 +120,7 @@ renderConnection = RunService.RenderStepped:Connect(function()
                     isAttacking = true
                 end
             else
-                -- Цель не в FOV или не видна, отпускаем ЛКМ
+                -- Цель не в FOV, отпускаем ЛКМ
                 if isAttacking then
                     mouse1release()
                     isAttacking = false
