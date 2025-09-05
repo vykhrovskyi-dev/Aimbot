@@ -61,12 +61,15 @@ local function getClosest()
     return closestPlayer
 end
 
-local function aimAtTarget(target)
-    if not target then return end
-    if not target.Character then return end
+local function isTargetVisible(target)
+    if not target or not target.Character then return false end
     
     local head = target.Character:FindFirstChild("Head")
-    if not head then return end
+    if not head then return false end
+    
+    -- Всегда возвращаем true, чтобы наведение работало сквозь стены
+    return true
+end
     
     camera.CFrame = camera.CFrame:Lerp(
         CFrame.new(camera.CFrame.Position, head.Position),
