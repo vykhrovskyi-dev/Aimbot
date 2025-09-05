@@ -74,9 +74,32 @@ local function aimAtTarget(target)
     )
 end
 
--- Функция всегда возвращает true для наведения сквозь стены
-local function isTargetVisible(target)
+-- Функция для проверки видимости цели (сквозь стены)
+local function canTarget(target)
     return true
+end
+
+-- Функция для проверки, видна ли цель (без препятствий)
+local function isTargetVisible(target)
+    if not target or not target.Character then return false end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
+    
+    -- Проверка видимости с помощью Raycast
+    local origin = camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * 1000
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, camera}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if raycastResult and raycastResult.Instance:IsDescendantOf(target.Character) then
+        return true
+    end
+    
+    return false
 end
 
 local function handleInput()
@@ -111,13 +134,23 @@ renderConnection = RunService.RenderStepped:Connect(function()
             local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
             local center = camera.ViewportSize / 2
             
+            -- Всегда наводимся, если цель в FOV (сквозь стены)
             if (screenPos - center).Magnitude <= fov then
                 aimAtTarget(target)
                 
-                -- Зажимаем ЛКМ для атаки
-                if not isAttacking then
-                    mouse1press()
-                    isAttacking = true
+                -- Стреляем только если цель видна (без препятствий)
+                if isTargetVisible(target) then
+                    -- Зажимаем ЛКМ для атаки
+                    if not isAttacking then
+                        mouse1press()
+                        isAttacking = true
+                    end
+                else
+                    -- Цель не видна, отпускаем ЛКМ
+                    if isAttacking then
+                        mouse1release()
+                        isAttacking = false
+                    end
                 end
             else
                 -- Цель не в FOV, отпускаем ЛКМ
