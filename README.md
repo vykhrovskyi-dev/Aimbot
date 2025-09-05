@@ -21,7 +21,7 @@ FOVring.Position = camera.ViewportSize / 2
 -- Новый обработчик ввода для клавиши C
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end -- не реагировать при вводе в чат
-    if input.KeyCode == Enum.KeyCode.C then
+    if input.KeyCode == Enum.KeyCode.V then
         autoAttack = not autoAttack
         print("AutoAttack:", autoAttack)
     end
