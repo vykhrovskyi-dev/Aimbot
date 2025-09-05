@@ -1,12 +1,12 @@
-local teamCheck = true -- Включена проверка команд (только противники)
+local teamCheck = false
 local fov = 150
 local smoothing = 1
 local autoAttack = false
-local scriptActive = true -- Флаг активности скрипта
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
 local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -18,27 +18,16 @@ FOVring.Transparency = 1
 FOVring.Color = Color3.fromRGB(255, 128, 128)
 FOVring.Position = camera.ViewportSize / 2
 
--- Обработчик клавиш
+-- Новый обработчик ввода для клавиши C
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    -- Переключение автоатаки по клавише V
-    if input.KeyCode == Enum.KeyCode.V then
+    if gameProcessed then return end -- не реагировать при вводе в чат
+    if input.KeyCode == Enum.KeyCode.C then
         autoAttack = not autoAttack
         print("AutoAttack:", autoAttack)
-    end
-    
-    -- Отключение скрипта по клавише Delete
-    if input.KeyCode == Enum.KeyCode.Delete then
-        scriptActive = false
-        FOVring:Remove()
-        print("Aimbot отключен")
     end
 end)
 
 local function getClosest()
-    if not scriptActive then return nil end
-    
     local cameraCFrame = camera.CFrame
     local cameraPosition = cameraCFrame.Position
     local lookVector = cameraCFrame.LookVector
@@ -49,26 +38,21 @@ local function getClosest()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == localPlayer then continue end
         
-        -- Проверка команд (только противники)
-        if teamCheck and player.Team == localPlayer.Team then continue end
-        
         local character = player.Character
         if not character then continue end
         
         local humanoid = character:FindFirstChild("Humanoid")
         local head = character:FindFirstChild("Head")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
         
-        if not (humanoid and head) then continue end
+        if not (humanoid and head and rootPart) then continue end
         if humanoid.Health <= 0 then continue end
-        
-        -- Проверка видимости цели
-        local screenPoint, onScreen = camera:WorldToViewportPoint(head.Position)
-        if not onScreen then continue end
+        if teamCheck and player.Team == localPlayer.Team then continue end
         
         local pointOnRay = cameraPosition + lookVector * (head.Position - cameraPosition).Magnitude
         local distance = (head.Position - pointOnRay).Magnitude
         
-        if distance < shortestDistance and distance <= fov then
+        if distance < shortestDistance then
             shortestDistance = distance
             closestPlayer = player
         end
@@ -78,31 +62,99 @@ local function getClosest()
 end
 
 local function aimAtTarget(target)
-    if not scriptActive then return end
-    if not target or not target.Character then return end
+    if not target then return end
+    if not target.Character then return end
     
     local head = target.Character:FindFirstChild("Head")
     if not head then return end
     
-    -- Плавное наведение
     camera.CFrame = camera.CFrame:Lerp(
         CFrame.new(camera.CFrame.Position, head.Position),
-        smoothing / 10
+        smoothing
     )
 end
 
--- Основной цикл
-RunService.RenderStepped:Connect(function()
-    if not scriptActive then return end -- Проверка активности скрипта
+local function isTargetVisible(target)
+    if not target or not target.Character then return false end
     
-    FOVring.Position = camera.ViewportSize / 2
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
+    
+    -- Проверка видимости с помощью Raycast
+    local origin = camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * 1000
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, camera}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if raycastResult and raycastResult.Instance:IsDescendantOf(target.Character) then
+        return true
+    end
+    
+    return false
+end
+
+local function handleInput()
+    if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
+        return true
+    end
+    
+    return false
+end
+
+local isAttacking = false
+local renderConnection
+renderConnection = RunService.RenderStepped:Connect(function()
+    if handleInput() then
+        renderConnection:Disconnect()
+        FOVring:Remove()
+        -- Отпускаем ЛКМ при выходе
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
+        end
+        return
+    end
     
     local pressed = autoAttack or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
     
     if pressed then
         local target = getClosest()
-        if target then
-            aimAtTarget(target)
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local headPos = target.Character.Head.Position
+            local screenPoint = camera:WorldToScreenPoint(headPos)
+            local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+            local center = camera.ViewportSize / 2
+            
+            if (screenPos - center).Magnitude <= fov and isTargetVisible(target) then
+                aimAtTarget(target)
+                
+                -- Зажимаем ЛКМ для атаки
+                if not isAttacking then
+                    mouse1press()
+                    isAttacking = true
+                end
+            else
+                -- Цель не в FOV или не видна, отпускаем ЛКМ
+                if isAttacking then
+                    mouse1release()
+                    isAttacking = false
+                end
+            end
+        else
+            -- Нет цели, отпускаем ЛКМ
+            if isAttacking then
+                mouse1release()
+                isAttacking = false
+            end
+        end
+    else
+        -- Не нажата ПКМ и autoAttack выключен, отпускаем ЛКМ
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
         end
     end
 end)
