@@ -1,74 +1,49 @@
 local RunService = game:GetService('RunService')
-local PlayerService = game:GetService('Players')
-local Teams = game:GetService('Teams')
+local Players = game:GetService('Players')
+local UserInputService = game:GetService('UserInputService')
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local Mouse = localPlayer:GetMouse()
 
-local LocalPlayer = PlayerService.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
-local Camera = workspace.CurrentCamera
+-- Настройки
+local teamCheck = false
+local fov = 150
+local smoothing = 1
+local autoAttack = false
 
--- Функция для определения, является ли игрок тиммейтом
-local function IsTeammate(player)
-    if not LocalPlayer.Team or not player.Team then
-        return false
-    end
-    return player.Team == LocalPlayer.Team
-end
-
-local function ESP(player)
+-- ESP функция
+local function ESP(Player)
     local ESPConnection
     local Drawings = {
         Box = Drawing.new('Square'),
         BoxOutline = Drawing.new('Square'),
     }
 
-    -- Настройка первоначальных свойств
-    for _, drawing in pairs(Drawings) do
-        drawing.Visible = false
-        drawing.Filled = false
-    end
-
-    Drawings.BoxOutline.Thickness = 3
-    Drawings.Box.Thickness = 1
-
     local function UpdateESP()
         ESPConnection = RunService.RenderStepped:Connect(function()
-            if not player or not player.Parent then
-                if ESPConnection then
-                    ESPConnection:Disconnect()
-                end
-                for _, drawing in pairs(Drawings) do
-                    drawing:Remove()
-                end
-                return
-            end
-
-            local Character = player.Character
+            local Character = Player.Character
             if Character then
-                local RootPart = Character:FindFirstChild('HumanoidRootPart')
-                if RootPart then
-                    local Position, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
-                    
+                local HumanoidRootPart = Character:FindFirstChild('HumanoidRootPart')
+                if HumanoidRootPart then
+                    local Position, OnScreen = camera:WorldToViewportPoint(HumanoidRootPart.Position)
+
                     if OnScreen then
-                        -- Определяем цвет в зависимости от команды
-                        local isTeammate = IsTeammate(player)
-                        local color = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-                        
-                        local scale = 1 / (Position.Z * math.tan(math.rad(Camera.FieldOfView * 0.5)) * 2) * 1000
+                        local scale = 1 / (Position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
                         local width, height = math.floor(4.5 * scale), math.floor(6 * scale)
                         local x, y = math.floor(Position.X), math.floor(Position.Y)
                         local xPosition, yPosition = math.floor(x - width * 0.5), math.floor((y - height * 0.5) + (0.5 * scale))
 
-                        -- Обновляем свойства Box
                         Drawings.Box.Size = Vector2.new(width, height)
                         Drawings.Box.Position = Vector2.new(xPosition, yPosition)
-                        Drawings.Box.Color = color
                         Drawings.Box.Visible = true
+                        Drawings.Box.Color = Color3.fromRGB(255, 255, 255)
+                        Drawings.Box.Thickness = 1
 
-                        -- Обновляем свойства Outline
                         Drawings.BoxOutline.Size = Vector2.new(width, height)
                         Drawings.BoxOutline.Position = Vector2.new(xPosition, yPosition)
                         Drawings.BoxOutline.Visible = true
+                        Drawings.BoxOutline.Color = Color3.fromRGB(0, 0, 0)
+                        Drawings.BoxOutline.Thickness = 2
 
                         Drawings.BoxOutline.ZIndex = 1
                         Drawings.Box.ZIndex = 2
@@ -88,34 +63,171 @@ local function ESP(player)
     end
 
     coroutine.wrap(UpdateESP)()
-    
-    -- Очистка при выходе игрока
-    player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if ESPConnection then
-                ESPConnection:Disconnect()
-            end
-            for _, drawing in pairs(Drawings) do
-                drawing:Remove()
-            end
-        end
+end
+
+-- Инициализация ESP для всех игроков
+for _, v in pairs(Players:GetPlayers()) do
+    if v ~= localPlayer then
+        coroutine.wrap(ESP)(v)
+    end   
+end
+
+Players.PlayerAdded:Connect(function(v)
+    task.delay(1, function()
+        coroutine.wrap(ESP)(v)
     end)
-end
-
--- Обработка существующих игроков
-for _, player in ipairs(PlayerService:GetPlayers()) do
-    if player ~= LocalPlayer then
-        coroutine.wrap(ESP)(player)
-    end
-end
-
--- Обработка новых игроков
-PlayerService.PlayerAdded:Connect(function(player)
-    coroutine.wrap(ESP)(player)
 end)
 
--- Обновление цветов при смене команды
-LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-    -- При смене команды нужно перезагрузить ESP для всех игроков
-    -- (в реальной реализации нужно аккуратно обновить цвета, а не пересоздавать)
+-- Функции аимбота
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = true
+FOVring.Thickness = 1.5
+FOVring.Radius = fov
+FOVring.Transparency = 1
+FOVring.Color = Color3.fromRGB(255, 128, 128)
+FOVring.Position = camera.ViewportSize / 2
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.V then
+        autoAttack = not autoAttack
+        print("AutoAttack:", autoAttack)
+    end
+end)
+
+local function getClosest()
+    local cameraCFrame = camera.CFrame
+    local cameraPosition = cameraCFrame.Position
+    local lookVector = cameraCFrame.LookVector
+    
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == localPlayer then continue end
+        
+        local character = player.Character
+        if not character then continue end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        local head = character:FindFirstChild("Head")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if not (humanoid and head and rootPart) then continue end
+        if humanoid.Health <= 0 then continue end
+        if teamCheck and player.Team == localPlayer.Team then continue end
+        
+        local pointOnRay = cameraPosition + lookVector * (head.Position - cameraPosition).Magnitude
+        local distance = (head.Position - pointOnRay).Magnitude
+        
+        if distance < shortestDistance then
+            shortestDistance = distance
+            closestPlayer = player
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function aimAtTarget(target)
+    if not target then return end
+    if not target.Character then return end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    camera.CFrame = camera.CFrame:Lerp(
+        CFrame.new(camera.CFrame.Position, head.Position),
+        smoothing
+    )
+end
+
+local function canTarget(target)
+    return true
+end
+
+local function isTargetVisible(target)
+    if not target or not target.Character then return false end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
+    
+    local origin = camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * 1000
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, camera}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if raycastResult and raycastResult.Instance:IsDescendantOf(target.Character) then
+        return true
+    end
+    
+    return false
+end
+
+local function handleInput()
+    if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
+        return true
+    end
+    
+    return false
+end
+
+local isAttacking = false
+local renderConnection
+renderConnection = RunService.RenderStepped:Connect(function()
+    if handleInput() then
+        renderConnection:Disconnect()
+        FOVring:Remove()
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
+        end
+        return
+    end
+    
+    local pressed = autoAttack or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+    
+    if pressed then
+        local target = getClosest()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local headPos = target.Character.Head.Position
+            local screenPoint = camera:WorldToScreenPoint(headPos)
+            local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+            local center = camera.ViewportSize / 2
+            
+            if (screenPos - center).Magnitude <= fov then
+                aimAtTarget(target)
+                
+                if isTargetVisible(target) then
+                    if not isAttacking then
+                        mouse1press()
+                        isAttacking = true
+                    end
+                else
+                    if isAttacking then
+                        mouse1release()
+                        isAttacking = false
+                    end
+                end
+            else
+                if isAttacking then
+                    mouse1release()
+                    isAttacking = false
+                end
+            end
+        else
+            if isAttacking then
+                mouse1release()
+                isAttacking = false
+            end
+        end
+    else
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
+        end
+    end
 end)
