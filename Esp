@@ -7,9 +7,11 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
 local Camera = workspace.CurrentCamera
 
--- Функция для проверки, является ли игрок тиммейтом
+-- Функция для определения, является ли игрок тиммейтом
 local function IsTeammate(player)
-    if not player.Team then return false end
+    if not LocalPlayer.Team or not player.Team then
+        return false
+    end
     return player.Team == LocalPlayer.Team
 end
 
@@ -32,7 +34,9 @@ local function ESP(player)
     local function UpdateESP()
         ESPConnection = RunService.RenderStepped:Connect(function()
             if not player or not player.Parent then
-                ESPConnection:Disconnect()
+                if ESPConnection then
+                    ESPConnection:Disconnect()
+                end
                 for _, drawing in pairs(Drawings) do
                     drawing:Remove()
                 end
@@ -47,7 +51,8 @@ local function ESP(player)
                     
                     if OnScreen then
                         -- Определяем цвет в зависимости от команды
-                        local color = IsTeammate(player) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                        local isTeammate = IsTeammate(player)
+                        local color = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
                         
                         local scale = 1 / (Position.Z * math.tan(math.rad(Camera.FieldOfView * 0.5)) * 2) * 1000
                         local width, height = math.floor(4.5 * scale), math.floor(6 * scale)
@@ -110,7 +115,7 @@ PlayerService.PlayerAdded:Connect(function(player)
 end)
 
 -- Обновление цветов при смене команды
-Teams.TeamChanged:Connect(function()
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     -- При смене команды нужно перезагрузить ESP для всех игроков
     -- (в реальной реализации нужно аккуратно обновить цвета, а не пересоздавать)
 end)
