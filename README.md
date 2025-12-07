@@ -1,268 +1,300 @@
--- ОБУЧАЮЩИЙ ПРИМЕР - Не содержит реального взлома
--- Требует доработки для работы в конкретной игре
-
--- Инициализация
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService('RunService')
+local Players = game:GetService('Players')
+local UserInputService = game:GetService('UserInputService')
 local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local Mouse = localPlayer:GetMouse()
 
--- Настройки (изменяются через GUI)
-local Settings = {
-    SilentAim = true,
-    AutoFire = true,
-    FOV = 120,
-    TargetPart = "Head",
-    TeamCheck = false,
-    Smoothing = 0.1,
-    Keybind = "RightControl"
-}
+-- Настройки
+local teamCheck = false
+local fov = 150
+local smoothing = 1
+local autoAttack = false
+local silentAimEnabled = true  -- Включен Silent Aim по умолчанию
 
--- GUI библиотека (пример с Rayfield)
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source.lua'))()
-
--- Создание окна GUI
-local Window = Rayfield:CreateWindow({
-    Name = "Silent Aim Assistant",
-    LoadingTitle = "Загрузка...",
-    LoadingSubtitle = "by Educational Example",
-    ConfigurationSaving = {
-        Enabled = true,
-        FileName = "SilentAimConfig"
-    },
-    Discord = {
-        Enabled = false
+-- ESP функция
+local function ESP(Player)
+    local ESPConnection
+    local Drawings = {
+        Box = Drawing.new('Square'),
+        BoxOutline = Drawing.new('Square'),
     }
-})
 
--- Вкладка Основные настройки
-local MainTab = Window:CreateTab("Основные", 4483362458)
+    local function UpdateESP()
+        ESPConnection = RunService.RenderStepped:Connect(function()
+            local Character = Player.Character
+            if Character then
+                local HumanoidRootPart = Character:FindFirstChild('HumanoidRootPart')
+                if HumanoidRootPart then
+                    local Position, OnScreen = camera:WorldToViewportPoint(HumanoidRootPart.Position)
 
-MainTab:CreateToggle({
-    Name = "Включить Silent Aim",
-    CurrentValue = Settings.SilentAim,
-    Flag = "ToggleSilentAim",
-    Callback = function(Value)
-        Settings.SilentAim = Value
-        print("Silent Aim:", Value)
+                    if OnScreen then
+                        local scale = 1 / (Position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
+                        local width, height = math.floor(4.5 * scale), math.floor(6 * scale)
+                        local x, y = math.floor(Position.X), math.floor(Position.Y)
+                        local xPosition, yPosition = math.floor(x - width * 0.5), math.floor((y - height * 0.5) + (0.5 * scale))
+
+                        Drawings.Box.Size = Vector2.new(width, height)
+                        Drawings.Box.Position = Vector2.new(xPosition, yPosition)
+                        Drawings.Box.Visible = true
+                        Drawings.Box.Color = Color3.fromRGB(255, 255, 255)
+                        Drawings.Box.Thickness = 1
+
+                        Drawings.BoxOutline.Size = Vector2.new(width, height)
+                        Drawings.BoxOutline.Position = Vector2.new(xPosition, yPosition)
+                        Drawings.BoxOutline.Visible = true
+                        Drawings.BoxOutline.Color = Color3.fromRGB(0, 0, 0)
+                        Drawings.BoxOutline.Thickness = 2
+
+                        Drawings.BoxOutline.ZIndex = 1
+                        Drawings.Box.ZIndex = 2
+                    else
+                        Drawings.Box.Visible = false
+                        Drawings.BoxOutline.Visible = false
+                    end
+                else
+                    Drawings.Box.Visible = false
+                    Drawings.BoxOutline.Visible = false
+                end
+            else
+                Drawings.Box.Visible = false
+                Drawings.BoxOutline.Visible = false
+            end
+        end)
     end
-})
 
-MainTab:CreateToggle({
-    Name = "Автоматический огонь",
-    CurrentValue = Settings.AutoFire,
-    Flag = "ToggleAutoFire",
-    Callback = function(Value)
-        Settings.AutoFire = Value
-        print("Auto Fire:", Value)
-    end
-})
-
-MainTab:CreateSlider({
-    Name = "Поле зрения (FOV)",
-    Range = {50, 300},
-    Increment = 10,
-    Suffix = "px",
-    CurrentValue = Settings.FOV,
-    Flag = "SliderFOV",
-    Callback = function(Value)
-        Settings.FOV = Value
-        UpdateFOVRing()
-    end
-})
-
--- Вкладка Визуальные настройки
-local VisualTab = Window:CreateTab("Визуал", 4483362458)
-
-local FOVRing = Drawing.new("Circle")
-FOVRing.Visible = true
-FOVRing.Thickness = 2
-FOVRing.Radius = Settings.FOV
-FOVRing.Color = Color3.fromRGB(255, 50, 50)
-FOVRing.Transparency = 0.5
-FOVRing.Filled = false
-
-local function UpdateFOVRing()
-    FOVRing.Radius = Settings.FOV
-    FOVRing.Position = workspace.CurrentCamera.ViewportSize / 2
+    coroutine.wrap(UpdateESP)()
 end
 
-VisualTab:CreateColorPicker({
-    Name = "Цвет FOV кольца",
-    Color = Color3.fromRGB(255, 50, 50),
-    Flag = "ColorPickerFOV",
-    Callback = function(Value)
-        FOVRing.Color = Value
+-- Инициализация ESP для всех игроков
+for _, v in pairs(Players:GetPlayers()) do
+    if v ~= localPlayer then
+        coroutine.wrap(ESP)(v)
+    end   
+end
+
+Players.PlayerAdded:Connect(function(v)
+    task.delay(1, function()
+        coroutine.wrap(ESP)(v)
+    end)
+end)
+
+-- Silent Aim система (невидимое наведение)
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = true
+FOVring.Thickness = 1.5
+FOVring.Radius = fov
+FOVring.Transparency = 1
+FOVring.Color = Color3.fromRGB(255, 128, 128)
+FOVring.Position = camera.ViewportSize / 2
+
+-- GUI для управления
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SilentAimGUI"
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 250, 0, 200)
+MainFrame.Position = UDim2.new(0, 10, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Title.Text = "SILENT AIM MOD"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SciFi
+Title.TextSize = 14
+Title.Parent = MainFrame
+
+-- Функция для создания переключателей
+local function createToggle(name, text, position, default, callback)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Name = name .. "ToggleFrame"
+    toggleFrame.Size = UDim2.new(1, -20, 0, 30)
+    toggleFrame.Position = position
+    toggleFrame.BackgroundTransparency = 1
+    toggleFrame.Parent = MainFrame
+
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = name .. "Toggle"
+    toggleButton.Size = UDim2.new(0, 20, 0, 20)
+    toggleButton.Position = UDim2.new(0, 0, 0, 5)
+    toggleButton.BackgroundColor3 = default and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    toggleButton.BorderSizePixel = 0
+    toggleButton.Text = ""
+    toggleButton.Parent = toggleFrame
+
+    local toggleLabel = Instance.new("TextLabel")
+    toggleLabel.Name = name .. "Label"
+    toggleLabel.Size = UDim2.new(1, -30, 1, 0)
+    toggleLabel.Position = UDim2.new(0, 25, 0, 0)
+    toggleLabel.BackgroundTransparency = 1
+    toggleLabel.Text = text
+    toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleLabel.Font = Enum.Font.SciFi
+    toggleLabel.TextSize = 14
+    toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    toggleLabel.Parent = toggleFrame
+
+    toggleButton.MouseButton1Click:Connect(function()
+        local newValue = not default
+        default = newValue
+        toggleButton.BackgroundColor3 = newValue and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        if callback then callback(newValue) end
+    end)
+
+    return toggleButton, function() return default end
+end
+
+-- Создаем переключатели
+local silentAimToggle, getSilentAimState = createToggle("silentAim", "Silent Aim", UDim2.new(0, 10, 0, 40), true, function(value)
+    silentAimEnabled = value
+    print("Silent Aim:", value)
+end)
+
+local autoAttackToggle, getAutoAttackState = createToggle("autoAttack", "Auto Attack", UDim2.new(0, 10, 0, 80), false, function(value)
+    autoAttack = value
+    print("Auto Attack:", value)
+end)
+
+local espToggle, getESPState = createToggle("esp", "ESP", UDim2.new(0, 10, 0, 120), true, function(value)
+    -- Здесь можно добавить управление видимостью ESP
+    print("ESP:", value)
+end)
+
+-- Входные команды
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.V then
+        autoAttack = not autoAttack
+        print("AutoAttack:", autoAttack)
     end
-})
-
-VisualTab:CreateToggle({
-    Name = "Показывать FOV кольцо",
-    CurrentValue = true,
-    Flag = "ToggleShowFOV",
-    Callback = function(Value)
-        FOVRing.Visible = Value
+    if input.KeyCode == Enum.KeyCode.G then
+        silentAimEnabled = not silentAimEnabled
+        print("Silent Aim:", silentAimEnabled)
     end
-})
+end)
 
--- Вкладка Прицеливание
-local AimTab = Window:CreateTab("Прицеливание", 4483362458)
-
-local TargetParts = {"Head", "HumanoidRootPart", "Torso"}
-AimTab:CreateDropdown({
-    Name = "Часть тела",
-    Options = TargetParts,
-    CurrentOption = Settings.TargetPart,
-    Flag = "DropdownTargetPart",
-    Callback = function(Value)
-        Settings.TargetPart = Value
-    end
-})
-
-AimTab:CreateSlider({
-    Name = "Сглаживание",
-    Range = {0, 1},
-    Increment = 0.05,
-    CurrentValue = Settings.Smoothing,
-    Flag = "SliderSmoothing",
-    Callback = function(Value)
-        Settings.Smoothing = Value
-    end
-})
-
-AimTab:CreateKeybind({
-    Name = "Горячая клавиша",
-    CurrentKeybind = Settings.Keybind,
-    HoldToInteract = false,
-    Flag = "KeybindMain",
-    Callback = function(Key)
-        Settings.Keybind = Key
-        print("Новая клавиша:", Key)
-    end
-})
-
--- Вкладка Информация
-local InfoTab = Window:CreateTab("Информация", 4483362458)
-
-InfoTab:CreateParagraph({
-    Title = "ВАЖНО: Это обучающий пример",
-    Content = "Данный скрипт демонстрирует только логику и GUI. Для реальной работы требуется:\n1. Найти RemoteEvent выстрелов в игре\n2. Создать hook для этого RemoteEvent\n3. Адаптировать под конкретную механику игры"
-})
-
-InfoTab:CreateButton({
-    Name = "Скопировать настройки",
-    Callback = function()
-        print("Настройки:", Settings)
-    end
-})
-
--- Логика выбора цели (безопасная демонстрация)
-local function FindTargetInFOV()
-    if not Settings.SilentAim then return nil end
+-- Функция для получения ближайшей цели для Silent Aim
+local function getSilentAimTarget()
+    local cameraCFrame = camera.CFrame
+    local cameraPosition = cameraCFrame.Position
+    local lookVector = cameraCFrame.LookVector
     
-    local camera = workspace.CurrentCamera
-    local center = camera.ViewportSize / 2
+    local closestPlayer = nil
+    local shortestDistance = math.huge
     
     for _, player in ipairs(Players:GetPlayers()) do
         if player == localPlayer then continue end
-        if Settings.TeamCheck and player.Team == localPlayer.Team then continue end
         
         local character = player.Character
-        if character and character:FindFirstChild(Settings.TargetPart) then
-            local part = character[Settings.TargetPart]
-            local screenPoint, onScreen = camera:WorldToViewportPoint(part.Position)
+        if not character then continue end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        local head = character:FindFirstChild("Head")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if not (humanoid and head and rootPart) then continue end
+        if humanoid.Health <= 0 then continue end
+        if teamCheck and player.Team == localPlayer.Team then continue end
+        
+        -- Проверяем, находится ли игрок в пределах FOV
+        local screenPoint = camera:WorldToScreenPoint(head.Position)
+        if screenPoint.Z > 0 then
+            local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+            local center = camera.ViewportSize / 2
+            local distance = (screenPos - center).Magnitude
             
-            if onScreen then
-                local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
-                local distance = (screenPos - center).Magnitude
-                
-                if distance <= Settings.FOV then
-                    -- Цель найдена в FOV
-                    return {
-                        Player = player,
-                        Character = character,
-                        Part = part,
-                        ScreenPosition = screenPos,
-                        Distance = distance
-                    }
-                end
+            if distance <= fov and distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = player
             end
         end
+    end
+    
+    return closestPlayer
+end
+
+-- Silent Aim функция (невидимое наведение)
+local function silentAim()
+    if not silentAimEnabled then return end
+    
+    local target = getSilentAimTarget()
+    if not target or not target.Character then return end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Применяем Silent Aim (невидимое наведение)
+    local currentTime = tick()
+    local mouseTarget = head.Position + Vector3.new(
+        math.sin(currentTime) * 0.5,
+        math.cos(currentTime) * 0.5,
+        0
+    )
+    
+    -- Невидимое наведение - изменяем точку прицеливания без движения камеры
+    if autoAttack or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+        -- Можно добавить эмуляцию выстрела здесь
+        return mouseTarget
     end
     
     return nil
 end
 
--- Основной цикл (демонстрационный)
-local connection
-connection = RunService.RenderStepped:Connect(function()
-    -- Обновление позиции FOV кольца
-    UpdateFOVRing()
+-- Основной цикл
+local renderConnection
+renderConnection = RunService.RenderStepped:Connect(function()
+    -- Обновляем позицию FOV круга
+    FOVring.Position = camera.ViewportSize / 2
     
-    -- Демонстрация логики (без реального воздействия на игру)
-    local target = FindTargetInFOV()
+    -- Silent Aim обработка
+    local aimTarget = silentAim()
     
-    if target and Settings.SilentAim then
-        -- Меняем цвет FOV кольца при наличии цели
-        FOVRing.Color = Color3.fromRGB(50, 255, 50)
-        
-        -- Демонстрация: выводим информацию о цели
-        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            if Settings.AutoFire then
-                -- Здесь должен быть hook RemoteEvent выстрела
-                -- Пример: WeaponRemote:FireServer(modifiedArguments)
-                print("Цель в FOV:", target.Player.Name, "| Дистанция:", math.floor(target.Distance))
-            end
-        end
-    else
-        FOVRing.Color = Color3.fromRGB(255, 50, 50)
+    -- Если включен autoAttack и есть цель, эмулируем выстрел
+    if autoAttack and aimTarget then
+        -- Эмуляция автоматического выстрела
+        -- (здесь должна быть логика выстрела в игре)
+    end
+    
+    -- Проверка на удаление
+    if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
+        renderConnection:Disconnect()
+        FOVring:Remove()
+        ScreenGui:Destroy()
     end
 end)
 
--- Ключевые места для доработки:
-print([[
-=== КЛЮЧЕВЫЕ МЕСТА ДЛЯ ДОРАБОТКИ ===
-
-1. НАЙТИ REMOTEEVENT ВЫСТРЕЛА:
-   - Откройте Explorer в игре
-   - Найдите ваш Tool/оружие
-   - Найдите RemoteEvent с именем типа:
-     * FireServer
-     * Shoot
-     * Fire
-     * RemoteEvent
-
-2. СОЗДАТЬ HOOK (пример):
-local weapon = localPlayer.Character:FindFirstChildOfClass("Tool")
-if weapon then
-    local remote = weapon:FindFirstChildOfClass("RemoteEvent")
-    if remote then
-        local originalFire = remote.FireServer
-        remote.FireServer = function(self, ...)
-            local args = {...}
-            if Settings.SilentAim and target then
-                -- Изменить аргументы на позицию цели
-                args[1] = target.Part.Position -- Пример
-            end
-            return originalFire(self, unpack(args))
+-- Дополнительная функция для автоматического выстрела
+local function checkAutoShoot()
+    if not autoAttack then return end
+    
+    local target = getSilentAimTarget()
+    if target and target.Character then
+        local humanoid = target.Character:FindFirstChild("Humanoid")
+        if humanoid and humanoid.Health > 0 then
+            -- Эмуляция нажатия кнопки выстрела
+            -- В реальной игре здесь должен быть вызов функции стрельбы
+            Mouse.Button1Down:Fire()
         end
     end
 end
 
-3. АДАПТИРОВАТЬ ПОД ИГРУ:
-   - Изучить аргументы RemoteEvent
-   - Определить, какой аргумент отвечает за направление
-   - Подставить координаты цели
-]])
-
--- Очистка при выходе
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Delete then
-        connection:Disconnect()
-        FOVRing:Remove()
-        Rayfield:Destroy()
-        print("Скрипт выключен")
-    end
+-- Проверка авто-выстрела с интервалом
+RunService.Heartbeat:Connect(function()
+    checkAutoShoot()
 end)
 
-print("GUI загружен! Нажмите RightControl для открытия меню")
+print("Silent Aim System Loaded!")
+print("Controls:")
+print("G - Toggle Silent Aim")
+print("V - Toggle Auto Attack")
+print("Delete - Unload Script")
