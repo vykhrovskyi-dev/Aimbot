@@ -1,14 +1,84 @@
+local RunService = game:GetService('RunService')
+local Players = game:GetService('Players')
+local UserInputService = game:GetService('UserInputService')
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local Mouse = localPlayer:GetMouse()
+
+-- Настройки
 local teamCheck = false
 local fov = 150
 local smoothing = 1
 local autoAttack = false
 
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local localPlayer = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+-- ESP функция
+local function ESP(Player)
+    local ESPConnection
+    local Drawings = {
+        Box = Drawing.new('Square'),
+        BoxOutline = Drawing.new('Square'),
+    }
 
+    local function UpdateESP()
+        ESPConnection = RunService.RenderStepped:Connect(function()
+            local Character = Player.Character
+            if Character then
+                local HumanoidRootPart = Character:FindFirstChild('HumanoidRootPart')
+                if HumanoidRootPart then
+                    local Position, OnScreen = camera:WorldToViewportPoint(HumanoidRootPart.Position)
+
+                    if OnScreen then
+                        local scale = 1 / (Position.Z * math.tan(math.rad(camera.FieldOfView * 0.5)) * 2) * 1000
+                        local width, height = math.floor(4.5 * scale), math.floor(6 * scale)
+                        local x, y = math.floor(Position.X), math.floor(Position.Y)
+                        local xPosition, yPosition = math.floor(x - width * 0.5), math.floor((y - height * 0.5) + (0.5 * scale))
+
+                        Drawings.Box.Size = Vector2.new(width, height)
+                        Drawings.Box.Position = Vector2.new(xPosition, yPosition)
+                        Drawings.Box.Visible = true
+                        Drawings.Box.Color = Color3.fromRGB(255, 255, 255)
+                        Drawings.Box.Thickness = 1
+
+                        Drawings.BoxOutline.Size = Vector2.new(width, height)
+                        Drawings.BoxOutline.Position = Vector2.new(xPosition, yPosition)
+                        Drawings.BoxOutline.Visible = true
+                        Drawings.BoxOutline.Color = Color3.fromRGB(0, 0, 0)
+                        Drawings.BoxOutline.Thickness = 2
+
+                        Drawings.BoxOutline.ZIndex = 1
+                        Drawings.Box.ZIndex = 2
+                    else
+                        Drawings.Box.Visible = false
+                        Drawings.BoxOutline.Visible = false
+                    end
+                else
+                    Drawings.Box.Visible = false
+                    Drawings.BoxOutline.Visible = false
+                end
+            else
+                Drawings.Box.Visible = false
+                Drawings.BoxOutline.Visible = false
+            end
+        end)
+    end
+
+    coroutine.wrap(UpdateESP)()
+end
+
+-- Инициализация ESP для всех игроков
+for _, v in pairs(Players:GetPlayers()) do
+    if v ~= localPlayer then
+        coroutine.wrap(ESP)(v)
+    end   
+end
+
+Players.PlayerAdded:Connect(function(v)
+    task.delay(1, function()
+        coroutine.wrap(ESP)(v)
+    end)
+end)
+
+-- Функции аимбота
 local FOVring = Drawing.new("Circle")
 FOVring.Visible = true
 FOVring.Thickness = 1.5
@@ -17,9 +87,8 @@ FOVring.Transparency = 1
 FOVring.Color = Color3.fromRGB(255, 128, 128)
 FOVring.Position = camera.ViewportSize / 2
 
--- Новый обработчик ввода для клавиши C
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end -- не реагировать при вводе в чат
+    if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.V then
         autoAttack = not autoAttack
         print("AutoAttack:", autoAttack)
@@ -73,8 +142,32 @@ local function aimAtTarget(target)
     )
 end
 
+local function canTarget(target)
+    return true
+end
+
+local function isTargetVisible(target)
+    if not target or not target.Character then return false end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
+    
+    local origin = camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * 1000
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, camera}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if raycastResult and raycastResult.Instance:IsDescendantOf(target.Character) then
+        return true
+    end
+    
+    return false
+end
+
 local function handleInput()
-    -- Убрана проверка клавиши Insert
     if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
         return true
     end
@@ -82,11 +175,16 @@ local function handleInput()
     return false
 end
 
+local isAttacking = false
 local renderConnection
 renderConnection = RunService.RenderStepped:Connect(function()
     if handleInput() then
         renderConnection:Disconnect()
         FOVring:Remove()
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
+        end
         return
     end
     
@@ -102,7 +200,34 @@ renderConnection = RunService.RenderStepped:Connect(function()
             
             if (screenPos - center).Magnitude <= fov then
                 aimAtTarget(target)
+                
+                if isTargetVisible(target) then
+                    if not isAttacking then
+                        mouse1press()
+                        isAttacking = true
+                    end
+                else
+                    if isAttacking then
+                        mouse1release()
+                        isAttacking = false
+                    end
+                end
+            else
+                if isAttacking then
+                    mouse1release()
+                    isAttacking = false
+                end
             end
+        else
+            if isAttacking then
+                mouse1release()
+                isAttacking = false
+            end
+        end
+    else
+        if isAttacking then
+            mouse1release()
+            isAttacking = false
         end
     end
 end)
