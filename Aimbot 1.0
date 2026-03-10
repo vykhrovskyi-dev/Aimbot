@@ -5,17 +5,14 @@ local TweenService = game:GetService('TweenService')
 local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- ══════════════════════════════════════
---           НАСТРОЙКИ
--- ══════════════════════════════════════
 local Settings = {
-    teamCheck     = false,
     fov           = 150,
     smoothing     = 1,
     autoAttack    = false,
     espEnabled    = true,
     aimbotEnabled = true,
     aimTarget     = "Head",
+    fovColor      = Color3.fromRGB(255, 100, 100),
 }
 
 -- ══════════════════════════════════════
@@ -26,11 +23,10 @@ local ESPPlayers = {}
 local function createESP(Player)
     if ESPPlayers[Player] then return end
     local Drawings = {
-        Box        = Drawing.new('Square'),
-        BoxOutline = Drawing.new('Square'),
-        Name       = Drawing.new('Text'),
-        Health     = Drawing.new('Square'),
-        HealthBG   = Drawing.new('Square'),
+        Box    = Drawing.new('Square'),
+        Name   = Drawing.new('Text'),
+        Health = Drawing.new('Square'),
+        HealthBG = Drawing.new('Square'),
     }
     Drawings.Name.Size    = 13
     Drawings.Name.Center  = true
@@ -55,14 +51,6 @@ local function createESP(Player)
                     local hp = math.clamp(Hum.Health / Hum.MaxHealth, 0, 1)
                     local r  = math.floor(255 * (1 - hp))
                     local g  = math.floor(255 * hp)
-
-                    Drawings.BoxOutline.Size      = Vector2.new(w + 2, h + 2)
-                    Drawings.BoxOutline.Position  = Vector2.new(x - 1, y - 1)
-                    Drawings.BoxOutline.Color     = Color3.fromRGB(0, 0, 0)
-                    Drawings.BoxOutline.Thickness = 2
-                    Drawings.BoxOutline.Filled    = false
-                    Drawings.BoxOutline.Visible   = true
-                    Drawings.BoxOutline.ZIndex    = 1
 
                     Drawings.Box.Size      = Vector2.new(w, h)
                     Drawings.Box.Position  = Vector2.new(x, y)
@@ -122,12 +110,12 @@ local FOVring = Drawing.new("Circle")
 FOVring.Thickness    = 1.5
 FOVring.NumSides     = 64
 FOVring.Transparency = 1
-FOVring.Color        = Color3.fromRGB(255, 100, 100)
 
 RunService.RenderStepped:Connect(function()
     FOVring.Position = camera.ViewportSize / 2
     FOVring.Radius   = Settings.fov
     FOVring.Visible  = Settings.aimbotEnabled
+    FOVring.Color    = Settings.fovColor
 end)
 
 -- ══════════════════════════════════════
@@ -137,7 +125,6 @@ local function getClosest()
     if not Settings.aimbotEnabled then return nil end
     local cCF  = camera.CFrame
     local cPos = cCF.Position
-    local lVec = cCF.LookVector
     local closest, best = nil, math.huge
 
     for _, player in ipairs(Players:GetPlayers()) do
@@ -148,15 +135,13 @@ local function getClosest()
         local part = char:FindFirstChild(Settings.aimTarget) or char:FindFirstChild("HumanoidRootPart")
         if not (hum and part) then continue end
         if hum.Health <= 0 then continue end
-        if Settings.teamCheck and player.Team == localPlayer.Team then continue end
 
-        local projected  = cPos + lVec * (part.Position - cPos).Magnitude
-        local dist       = (part.Position - projected).Magnitude
-        local sp, onScr  = camera:WorldToScreenPoint(part.Position)
+        -- Используем экранное расстояние от центра, не проекцию
+        local sp, onScr = camera:WorldToScreenPoint(part.Position)
         if not onScr then continue end
         local screenDist = (Vector2.new(sp.X, sp.Y) - camera.ViewportSize / 2).Magnitude
-        if screenDist <= Settings.fov and dist < best then
-            best    = dist
+        if screenDist <= Settings.fov and screenDist < best then
+            best    = screenDist
             closest = player
         end
     end
@@ -195,15 +180,13 @@ renderConn = RunService.RenderStepped:Connect(function()
         renderConn:Disconnect(); FOVring:Remove(); return
     end
 
-    -- RMB aims, autoAttack shoots automatically when aimed
     local aiming   = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-    local shooting = Settings.autoAttack
 
     if aiming and Settings.aimbotEnabled then
         local target = getClosest()
         if target then
             aimAtTarget(target)
-            if shooting and isVisible(target) then
+            if Settings.autoAttack and isVisible(target) then
                 if not isAttacking then mouse1press(); isAttacking = true end
             else
                 if isAttacking then mouse1release(); isAttacking = false end
@@ -229,10 +212,9 @@ ScreenGui.Parent         = pcall(function() return game:GetService("CoreGui") en
 local blur = Instance.new("BlurEffect", camera)
 blur.Size = 0
 
--- Main window
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size             = UDim2.new(0, 300, 0, 340)
-Main.Position         = UDim2.new(0.5, -150, 0.5, -170)
+Main.Size             = UDim2.new(0, 300, 0, 370)
+Main.Position         = UDim2.new(0.5, -150, 0.5, -185)
 Main.BackgroundColor3 = Color3.fromRGB(11, 11, 16)
 Main.BorderSizePixel  = 0
 Main.Visible          = false
@@ -243,41 +225,37 @@ Stroke.Color        = Color3.fromRGB(160, 40, 240)
 Stroke.Thickness    = 1.5
 Stroke.Transparency = 0.35
 
--- Top accent line
 local TopBar = Instance.new("Frame", Main)
 TopBar.Size             = UDim2.new(1, 0, 0, 3)
 TopBar.BackgroundColor3 = Color3.fromRGB(160, 40, 240)
 TopBar.BorderSizePixel  = 0
 Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 14)
 
--- Header
 local Header = Instance.new("Frame", Main)
-Header.Size             = UDim2.new(1, 0, 0, 46)
-Header.Position         = UDim2.new(0, 0, 0, 3)
+Header.Size                   = UDim2.new(1, 0, 0, 46)
+Header.Position               = UDim2.new(0, 0, 0, 3)
 Header.BackgroundTransparency = 1
-Header.BorderSizePixel  = 0
 
 local TitleLbl = Instance.new("TextLabel", Header)
-TitleLbl.Size                = UDim2.new(1, -20, 1, 0)
-TitleLbl.Position            = UDim2.new(0, 18, 0, 0)
+TitleLbl.Size                   = UDim2.new(1, -20, 1, 0)
+TitleLbl.Position               = UDim2.new(0, 18, 0, 0)
 TitleLbl.BackgroundTransparency = 1
-TitleLbl.Text                = "PHANTOM"
-TitleLbl.TextColor3          = Color3.fromRGB(210, 170, 255)
-TitleLbl.Font                = Enum.Font.GothamBold
-TitleLbl.TextSize             = 15
-TitleLbl.TextXAlignment       = Enum.TextXAlignment.Left
+TitleLbl.Text                   = "PHANTOM"
+TitleLbl.TextColor3             = Color3.fromRGB(210, 170, 255)
+TitleLbl.Font                   = Enum.Font.GothamBold
+TitleLbl.TextSize               = 15
+TitleLbl.TextXAlignment         = Enum.TextXAlignment.Left
 
 local HintLbl = Instance.new("TextLabel", Header)
-HintLbl.Size                = UDim2.new(1, -20, 0, 14)
-HintLbl.Position            = UDim2.new(0, 18, 1, -16)
+HintLbl.Size                   = UDim2.new(1, -20, 0, 14)
+HintLbl.Position               = UDim2.new(0, 18, 1, -16)
 HintLbl.BackgroundTransparency = 1
-HintLbl.Text                = "RightShift  •  toggle"
-HintLbl.TextColor3          = Color3.fromRGB(100, 80, 140)
-HintLbl.Font                = Enum.Font.Gotham
-HintLbl.TextSize             = 10
-HintLbl.TextXAlignment       = Enum.TextXAlignment.Left
+HintLbl.Text                   = "RightShift  •  toggle"
+HintLbl.TextColor3             = Color3.fromRGB(100, 80, 140)
+HintLbl.Font                   = Enum.Font.Gotham
+HintLbl.TextSize               = 10
+HintLbl.TextXAlignment         = Enum.TextXAlignment.Left
 
--- Divider
 local Divider = Instance.new("Frame", Main)
 Divider.Size             = UDim2.new(1, -24, 0, 1)
 Divider.Position         = UDim2.new(0, 12, 0, 50)
@@ -288,9 +266,7 @@ Divider.BorderSizePixel  = 0
 local dragging, dragStart, startPos
 Header.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging  = true
-        dragStart = i.Position
-        startPos  = Main.Position
+        dragging  = true; dragStart = i.Position; startPos = Main.Position
     end
 end)
 Header.InputEnded:Connect(function(i)
@@ -299,34 +275,30 @@ end)
 UserInputService.InputChanged:Connect(function(i)
     if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
         local d = i.Position - dragStart
-        Main.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + d.X,
-            startPos.Y.Scale, startPos.Y.Offset + d.Y
-        )
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
     end
 end)
 
--- Content scroll
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Size                  = UDim2.new(1, -16, 1, -60)
-Scroll.Position              = UDim2.new(0, 8, 0, 58)
+Scroll.Size                   = UDim2.new(1, -16, 1, -60)
+Scroll.Position               = UDim2.new(0, 8, 0, 58)
 Scroll.BackgroundTransparency = 1
-Scroll.BorderSizePixel       = 0
-Scroll.ScrollBarThickness    = 2
-Scroll.ScrollBarImageColor3  = Color3.fromRGB(160, 40, 240)
-Scroll.CanvasSize            = UDim2.new(0, 0, 0, 0)
-Scroll.AutomaticCanvasSize   = Enum.AutomaticSize.Y
+Scroll.BorderSizePixel        = 0
+Scroll.ScrollBarThickness     = 2
+Scroll.ScrollBarImageColor3   = Color3.fromRGB(160, 40, 240)
+Scroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
+Scroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
 
 local List = Instance.new("UIListLayout", Scroll)
-List.Padding              = UDim.new(0, 6)
-List.SortOrder            = Enum.SortOrder.LayoutOrder
-List.HorizontalAlignment  = Enum.HorizontalAlignment.Center
+List.Padding             = UDim.new(0, 6)
+List.SortOrder           = Enum.SortOrder.LayoutOrder
+List.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 local Pad = Instance.new("UIPadding", Scroll)
 Pad.PaddingTop    = UDim.new(0, 4)
 Pad.PaddingBottom = UDim.new(0, 8)
 
--- ── Toggle builder ────────────────────────────────────────
+-- ── Toggle ────────────────────────────────────────────────
 local function makeToggle(icon, label, key, order)
     local row = Instance.new("Frame", Scroll)
     row.Size             = UDim2.new(1, -4, 0, 42)
@@ -335,261 +307,259 @@ local function makeToggle(icon, label, key, order)
     row.LayoutOrder      = order
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
 
-    -- hover effect
-    local hoverStroke = Instance.new("UIStroke", row)
-    hoverStroke.Color       = Color3.fromRGB(160, 40, 240)
-    hoverStroke.Thickness   = 1
-    hoverStroke.Transparency = 1
+    local hs = Instance.new("UIStroke", row)
+    hs.Color = Color3.fromRGB(160, 40, 240); hs.Thickness = 1; hs.Transparency = 1
+    row.MouseEnter:Connect(function() TweenService:Create(hs, TweenInfo.new(0.15), {Transparency=0.6}):Play() end)
+    row.MouseLeave:Connect(function() TweenService:Create(hs, TweenInfo.new(0.15), {Transparency=1}):Play() end)
 
-    row.MouseEnter:Connect(function()
-        TweenService:Create(hoverStroke, TweenInfo.new(0.15), { Transparency = 0.6 }):Play()
-    end)
-    row.MouseLeave:Connect(function()
-        TweenService:Create(hoverStroke, TweenInfo.new(0.15), { Transparency = 1 }):Play()
-    end)
+    local ico = Instance.new("TextLabel", row)
+    ico.Size = UDim2.new(0,38,1,0); ico.BackgroundTransparency=1
+    ico.Text=icon; ico.TextSize=16; ico.Font=Enum.Font.GothamBold
+    ico.TextColor3=Color3.fromRGB(190,140,255)
 
-    local iconLbl = Instance.new("TextLabel", row)
-    iconLbl.Size                = UDim2.new(0, 38, 1, 0)
-    iconLbl.BackgroundTransparency = 1
-    iconLbl.Text                = icon
-    iconLbl.TextSize             = 16
-    iconLbl.Font                 = Enum.Font.GothamBold
-    iconLbl.TextColor3           = Color3.fromRGB(190, 140, 255)
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size=UDim2.new(1,-90,1,0); lbl.Position=UDim2.new(0,38,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text=label
+    lbl.TextColor3=Color3.fromRGB(215,215,230); lbl.Font=Enum.Font.Gotham
+    lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
 
-    local nameLbl = Instance.new("TextLabel", row)
-    nameLbl.Size                = UDim2.new(1, -90, 1, 0)
-    nameLbl.Position            = UDim2.new(0, 38, 0, 0)
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Text                = label
-    nameLbl.TextColor3          = Color3.fromRGB(215, 215, 230)
-    nameLbl.Font                = Enum.Font.Gotham
-    nameLbl.TextSize             = 13
-    nameLbl.TextXAlignment       = Enum.TextXAlignment.Left
-
-    -- pill
     local pill = Instance.new("Frame", row)
-    pill.Size             = UDim2.new(0, 42, 0, 21)
-    pill.Position         = UDim2.new(1, -50, 0.5, -10.5)
-    pill.BorderSizePixel  = 0
-    Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+    pill.Size=UDim2.new(0,42,0,21); pill.Position=UDim2.new(1,-50,0.5,-10.5)
+    pill.BorderSizePixel=0
+    Instance.new("UICorner", pill).CornerRadius=UDim.new(1,0)
 
     local knob = Instance.new("Frame", pill)
-    knob.Size            = UDim2.new(0, 17, 0, 17)
-    knob.BorderSizePixel = 0
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    knob.Size=UDim2.new(0,17,0,17); knob.BorderSizePixel=0
+    Instance.new("UICorner", knob).CornerRadius=UDim.new(1,0)
 
     local statusLbl = Instance.new("TextLabel", row)
-    statusLbl.Size               = UDim2.new(0, 42, 0, 14)
-    statusLbl.Position           = UDim2.new(1, -50, 1, -14)
-    statusLbl.BackgroundTransparency = 1
-    statusLbl.Font               = Enum.Font.Gotham
-    statusLbl.TextSize           = 9
-    statusLbl.TextXAlignment     = Enum.TextXAlignment.Center
+    statusLbl.Size=UDim2.new(0,42,0,14); statusLbl.Position=UDim2.new(1,-50,1,-14)
+    statusLbl.BackgroundTransparency=1; statusLbl.Font=Enum.Font.Gotham
+    statusLbl.TextSize=9; statusLbl.TextXAlignment=Enum.TextXAlignment.Center
 
     local function refresh(animate)
-        local on  = Settings[key]
-        local dur = animate and 0.18 or 0
-        TweenService:Create(pill, TweenInfo.new(dur), {
-            BackgroundColor3 = on and Color3.fromRGB(140, 35, 220) or Color3.fromRGB(38, 38, 52)
+        local on = Settings[key]; local dur = animate and 0.18 or 0
+        TweenService:Create(pill,  TweenInfo.new(dur), {BackgroundColor3 = on and Color3.fromRGB(140,35,220) or Color3.fromRGB(38,38,52)}):Play()
+        TweenService:Create(knob,  TweenInfo.new(dur), {
+            Position=on and UDim2.new(0,22,0.5,-8.5) or UDim2.new(0,2,0.5,-8.5),
+            BackgroundColor3=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(110,110,125)
         }):Play()
-        TweenService:Create(knob, TweenInfo.new(dur), {
-            Position         = on and UDim2.new(0, 22, 0.5, -8.5) or UDim2.new(0, 2, 0.5, -8.5),
-            BackgroundColor3 = on and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(110, 110, 125)
-        }):Play()
-        statusLbl.Text      = on and "ON" or "OFF"
-        statusLbl.TextColor3 = on and Color3.fromRGB(180, 100, 255) or Color3.fromRGB(80, 80, 100)
+        statusLbl.Text       = on and "ON" or "OFF"
+        statusLbl.TextColor3 = on and Color3.fromRGB(180,100,255) or Color3.fromRGB(80,80,100)
     end
     refresh(false)
 
     row.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            Settings[key] = not Settings[key]
-            refresh(true)
+            Settings[key] = not Settings[key]; refresh(true)
         end
     end)
-
     return row
 end
 
--- ── Slider builder ────────────────────────────────────────
+-- ── Slider ────────────────────────────────────────────────
 local function makeSlider(icon, label, key, minV, maxV, order)
     local row = Instance.new("Frame", Scroll)
-    row.Size             = UDim2.new(1, -4, 0, 56)
-    row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    row.BorderSizePixel  = 0
-    row.LayoutOrder      = order
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
+    row.Size=UDim2.new(1,-4,0,56); row.BackgroundColor3=Color3.fromRGB(18,18,26)
+    row.BorderSizePixel=0; row.LayoutOrder=order
+    Instance.new("UICorner", row).CornerRadius=UDim.new(0,10)
 
-    local iconLbl = Instance.new("TextLabel", row)
-    iconLbl.Size                = UDim2.new(0, 38, 0, 28)
-    iconLbl.BackgroundTransparency = 1
-    iconLbl.Text                = icon
-    iconLbl.TextSize             = 16
-    iconLbl.Font                 = Enum.Font.GothamBold
-    iconLbl.TextColor3           = Color3.fromRGB(190, 140, 255)
+    local ico=Instance.new("TextLabel",row)
+    ico.Size=UDim2.new(0,38,0,28); ico.BackgroundTransparency=1
+    ico.Text=icon; ico.TextSize=16; ico.Font=Enum.Font.GothamBold
+    ico.TextColor3=Color3.fromRGB(190,140,255)
 
-    local nameLbl = Instance.new("TextLabel", row)
-    nameLbl.Size                = UDim2.new(0.6, 0, 0, 28)
-    nameLbl.Position            = UDim2.new(0, 38, 0, 0)
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Text                = label
-    nameLbl.TextColor3          = Color3.fromRGB(215, 215, 230)
-    nameLbl.Font                = Enum.Font.Gotham
-    nameLbl.TextSize             = 13
-    nameLbl.TextXAlignment       = Enum.TextXAlignment.Left
+    local lbl=Instance.new("TextLabel",row)
+    lbl.Size=UDim2.new(0.6,0,0,28); lbl.Position=UDim2.new(0,38,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text=label
+    lbl.TextColor3=Color3.fromRGB(215,215,230); lbl.Font=Enum.Font.Gotham
+    lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
 
-    local valLbl = Instance.new("TextLabel", row)
-    valLbl.Size                = UDim2.new(0, 48, 0, 28)
-    valLbl.Position            = UDim2.new(1, -54, 0, 0)
-    valLbl.BackgroundTransparency = 1
-    valLbl.Text                = tostring(Settings[key])
-    valLbl.TextColor3          = Color3.fromRGB(180, 80, 255)
-    valLbl.Font                = Enum.Font.GothamBold
-    valLbl.TextSize             = 13
-    valLbl.TextXAlignment       = Enum.TextXAlignment.Right
+    local valLbl=Instance.new("TextLabel",row)
+    valLbl.Size=UDim2.new(0,48,0,28); valLbl.Position=UDim2.new(1,-54,0,0)
+    valLbl.BackgroundTransparency=1; valLbl.Text=tostring(Settings[key])
+    valLbl.TextColor3=Color3.fromRGB(180,80,255); valLbl.Font=Enum.Font.GothamBold
+    valLbl.TextSize=13; valLbl.TextXAlignment=Enum.TextXAlignment.Right
 
-    local trackBG = Instance.new("Frame", row)
-    trackBG.Size             = UDim2.new(1, -20, 0, 5)
-    trackBG.Position         = UDim2.new(0, 10, 0, 38)
-    trackBG.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-    trackBG.BorderSizePixel  = 0
-    Instance.new("UICorner", trackBG).CornerRadius = UDim.new(1, 0)
+    local trackBG=Instance.new("Frame",row)
+    trackBG.Size=UDim2.new(1,-20,0,5); trackBG.Position=UDim2.new(0,10,0,38)
+    trackBG.BackgroundColor3=Color3.fromRGB(35,35,50); trackBG.BorderSizePixel=0
+    Instance.new("UICorner",trackBG).CornerRadius=UDim.new(1,0)
 
-    local fill = Instance.new("Frame", trackBG)
-    fill.Size             = UDim2.new((Settings[key] - minV) / (maxV - minV), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(150, 40, 240)
-    fill.BorderSizePixel  = 0
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+    local fill=Instance.new("Frame",trackBG)
+    fill.Size=UDim2.new((Settings[key]-minV)/(maxV-minV),0,1,0)
+    fill.BackgroundColor3=Color3.fromRGB(150,40,240); fill.BorderSizePixel=0
+    Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0)
 
-    local handle = Instance.new("Frame", trackBG)
-    handle.Size             = UDim2.new(0, 13, 0, 13)
-    handle.AnchorPoint      = Vector2.new(0.5, 0.5)
-    handle.Position         = UDim2.new(fill.Size.X.Scale, 0, 0.5, 0)
-    handle.BackgroundColor3 = Color3.fromRGB(215, 175, 255)
-    handle.BorderSizePixel  = 0
-    Instance.new("UICorner", handle).CornerRadius = UDim.new(1, 0)
+    local handle=Instance.new("Frame",trackBG)
+    handle.Size=UDim2.new(0,13,0,13); handle.AnchorPoint=Vector2.new(0.5,0.5)
+    handle.Position=UDim2.new(fill.Size.X.Scale,0,0.5,0)
+    handle.BackgroundColor3=Color3.fromRGB(215,175,255); handle.BorderSizePixel=0
+    Instance.new("UICorner",handle).CornerRadius=UDim.new(1,0)
 
-    local sliding = false
+    local sliding=false
     local function setVal(input)
-        local pct = math.clamp((input.Position.X - trackBG.AbsolutePosition.X) / trackBG.AbsoluteSize.X, 0, 1)
-        local val = math.floor(minV + (maxV - minV) * pct)
-        Settings[key]    = val
-        fill.Size        = UDim2.new(pct, 0, 1, 0)
-        handle.Position  = UDim2.new(pct, 0, 0.5, 0)
-        valLbl.Text      = tostring(val)
+        local pct=math.clamp((input.Position.X-trackBG.AbsolutePosition.X)/trackBG.AbsoluteSize.X,0,1)
+        local val=math.floor(minV+(maxV-minV)*pct)
+        Settings[key]=val; fill.Size=UDim2.new(pct,0,1,0)
+        handle.Position=UDim2.new(pct,0,0.5,0); valLbl.Text=tostring(val)
     end
-
     trackBG.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true; setVal(i) end
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=true; setVal(i) end
     end)
     trackBG.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end
     end)
     UserInputService.InputChanged:Connect(function(i)
-        if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then setVal(i) end
+        if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then setVal(i) end
     end)
-
     return row
 end
 
--- ── Target selector ───────────────────────────────────────
-local function makeTargetPicker(order)
+-- ── FOV Color picker ──────────────────────────────────────
+local function makeFovColorPicker(order)
     local row = Instance.new("Frame", Scroll)
-    row.Size             = UDim2.new(1, -4, 0, 50)
-    row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-    row.BorderSizePixel  = 0
-    row.LayoutOrder      = order
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
+    row.Size=UDim2.new(1,-4,0,42); row.BackgroundColor3=Color3.fromRGB(18,18,26)
+    row.BorderSizePixel=0; row.LayoutOrder=order
+    Instance.new("UICorner",row).CornerRadius=UDim.new(0,10)
 
-    local iconLbl = Instance.new("TextLabel", row)
-    iconLbl.Size                = UDim2.new(0, 38, 0, 26)
-    iconLbl.BackgroundTransparency = 1
-    iconLbl.Text                = "🎯"
-    iconLbl.TextSize             = 16
-    iconLbl.Font                 = Enum.Font.GothamBold
-    iconLbl.TextColor3           = Color3.fromRGB(190, 140, 255)
+    local ico=Instance.new("TextLabel",row)
+    ico.Size=UDim2.new(0,38,1,0); ico.BackgroundTransparency=1
+    ico.Text="🎨"; ico.TextSize=16; ico.Font=Enum.Font.GothamBold
+    ico.TextColor3=Color3.fromRGB(190,140,255)
 
-    local nameLbl = Instance.new("TextLabel", row)
-    nameLbl.Size                = UDim2.new(1, -50, 0, 26)
-    nameLbl.Position            = UDim2.new(0, 38, 0, 0)
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Text                = "Aim Target"
-    nameLbl.TextColor3          = Color3.fromRGB(215, 215, 230)
-    nameLbl.Font                = Enum.Font.Gotham
-    nameLbl.TextSize             = 13
-    nameLbl.TextXAlignment       = Enum.TextXAlignment.Left
+    local lbl=Instance.new("TextLabel",row)
+    lbl.Size=UDim2.new(1,-130,1,0); lbl.Position=UDim2.new(0,38,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text="FOV Color"
+    lbl.TextColor3=Color3.fromRGB(215,215,230); lbl.Font=Enum.Font.Gotham
+    lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
 
-    local btnHolder = Instance.new("Frame", row)
-    btnHolder.Size                  = UDim2.new(1, -16, 0, 24)
-    btnHolder.Position              = UDim2.new(0, 8, 0, 24)
-    btnHolder.BackgroundTransparency = 1
+    local colors = {
+        {Color3.fromRGB(255,100,100), "🔴"},
+        {Color3.fromRGB(100,200,255), "🔵"},
+        {Color3.fromRGB(100,255,130), "🟢"},
+        {Color3.fromRGB(255,220,50),  "🟡"},
+        {Color3.fromRGB(255,255,255), "⚪"},
+    }
 
-    local UIL = Instance.new("UIListLayout", btnHolder)
-    UIL.FillDirection = Enum.FillDirection.Horizontal
-    UIL.Padding       = UDim.new(0, 6)
+    local swatchHolder = Instance.new("Frame", row)
+    swatchHolder.Size=UDim2.new(0,110,0,26); swatchHolder.Position=UDim2.new(1,-118,0.5,-13)
+    swatchHolder.BackgroundTransparency=1; swatchHolder.BorderSizePixel=0
 
-    local buttons = {}
-    local function makeBtn(label, targetKey)
-        local btn = Instance.new("TextButton", btnHolder)
-        btn.Size             = UDim2.new(0.5, -3, 1, 0)
-        btn.BackgroundColor3 = Settings.aimTarget == targetKey
-            and Color3.fromRGB(140, 35, 220) or Color3.fromRGB(32, 32, 45)
-        btn.BorderSizePixel  = 0
-        btn.Text             = label
-        btn.TextColor3       = Color3.fromRGB(225, 225, 240)
-        btn.Font             = Enum.Font.GothamBold
-        btn.TextSize         = 11
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-        buttons[targetKey] = btn
+    local swatchList=Instance.new("UIListLayout",swatchHolder)
+    swatchList.FillDirection=Enum.FillDirection.Horizontal; swatchList.Padding=UDim.new(0,4)
 
+    for _, c in ipairs(colors) do
+        local sw = Instance.new("TextButton", swatchHolder)
+        sw.Size=UDim2.new(0,18,0,18); sw.BackgroundColor3=c[1]
+        sw.BorderSizePixel=0; sw.Text=""
+        Instance.new("UICorner",sw).CornerRadius=UDim.new(1,0)
+
+        -- selected indicator
+        local selStroke = Instance.new("UIStroke",sw)
+        selStroke.Color=Color3.fromRGB(255,255,255)
+        selStroke.Thickness=1.5
+        selStroke.Transparency = Settings.fovColor == c[1] and 0 or 1
+
+        sw.MouseButton1Click:Connect(function()
+            Settings.fovColor = c[1]
+            for _, child in ipairs(swatchHolder:GetChildren()) do
+                if child:IsA("TextButton") then
+                    local s = child:FindFirstChildOfClass("UIStroke")
+                    if s then s.Transparency = 1 end
+                end
+            end
+            selStroke.Transparency = 0
+        end)
+    end
+    return row
+end
+
+-- ── Target picker ────────────────────────────────
+local function makeTargetPicker(order)
+    local row=Instance.new("Frame",Scroll)
+    row.Size=UDim2.new(1,-4,0,50); row.BackgroundColor3=Color3.fromRGB(18,18,26)
+    row.BorderSizePixel=0; row.LayoutOrder=order
+    Instance.new("UICorner",row).CornerRadius=UDim.new(0,10)
+
+    local ico=Instance.new("TextLabel",row)
+    ico.Size=UDim2.new(0,38,0,26); ico.BackgroundTransparency=1
+    ico.Text="🎯"; ico.TextSize=16; ico.Font=Enum.Font.GothamBold
+    ico.TextColor3=Color3.fromRGB(190,140,255)
+
+    local lbl=Instance.new("TextLabel",row)
+    lbl.Size=UDim2.new(1,-50,0,26); lbl.Position=UDim2.new(0,38,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text="Aim Target"
+    lbl.TextColor3=Color3.fromRGB(215,215,230); lbl.Font=Enum.Font.Gotham
+    lbl.TextSize=13; lbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    local btnHolder=Instance.new("Frame",row)
+    btnHolder.Size=UDim2.new(1,-16,0,24); btnHolder.Position=UDim2.new(0,8,0,24)
+    btnHolder.BackgroundTransparency=1
+
+    local UIL=Instance.new("UIListLayout",btnHolder)
+    UIL.FillDirection=Enum.FillDirection.Horizontal; UIL.Padding=UDim.new(0,6)
+
+    local buttons={}
+    local function makeBtn(label,targetKey)
+        local btn=Instance.new("TextButton",btnHolder)
+        btn.Size=UDim2.new(0.5,-3,1,0)
+        btn.BackgroundColor3=Settings.aimTarget==targetKey and Color3.fromRGB(140,35,220) or Color3.fromRGB(32,32,45)
+        btn.BorderSizePixel=0; btn.Text=label
+        btn.TextColor3=Color3.fromRGB(225,225,240); btn.Font=Enum.Font.GothamBold
+        btn.TextSize=11
+        Instance.new("UICorner",btn).CornerRadius=UDim.new(0,7)
+        buttons[targetKey]=btn
         btn.MouseButton1Click:Connect(function()
-            Settings.aimTarget = targetKey
-            for k, b in pairs(buttons) do
-                TweenService:Create(b, TweenInfo.new(0.15), {
-                    BackgroundColor3 = k == targetKey
-                        and Color3.fromRGB(140, 35, 220) or Color3.fromRGB(32, 32, 45)
+            Settings.aimTarget=targetKey
+            for k,b in pairs(buttons) do
+                TweenService:Create(b,TweenInfo.new(0.15),{
+                    BackgroundColor3=k==targetKey and Color3.fromRGB(140,35,220) or Color3.fromRGB(32,32,45)
                 }):Play()
             end
         end)
     end
-
-    makeBtn("HEAD", "Head")
-    makeBtn("BODY", "HumanoidRootPart")
+    makeBtn("HEAD","Head")
+    makeBtn("BODY","HumanoidRootPart")
     return row
 end
 
--- ── Build UI ──────────────────────────────────────────────
-makeToggle("👁",  "ESP Boxes",    "espEnabled",    1)
-makeToggle("🖱",  "Aimbot",       "aimbotEnabled", 2)
-makeToggle("⚔",  "Auto Attack",  "autoAttack",    3)
-makeToggle("🛡",  "Team Check",   "teamCheck",     4)
-makeSlider("🔵",  "FOV",          "fov",  30, 500, 5)
+-- ── Build ─────────────────────────────────────────────────
+makeToggle("👁",  "ESP Boxes",   "espEnabled",    1)
+makeToggle("🖱",  "Aimbot",      "aimbotEnabled", 2)
+makeToggle("⚔",  "Auto Attack", "autoAttack",    3)
+makeSlider("🔵",  "FOV",         "fov",  30, 500, 4)
+makeFovColorPicker(5)
 makeTargetPicker(6)
 
--- ── Menu toggle ───────────────────────────────────────────
+-- ── Menu toggle + auto-open ───────────────────────────────
 local menuOpen = false
+
+local function openMenu()
+    menuOpen = true
+    Main.Size     = UDim2.new(0, 0, 0, 0)
+    Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Main.Visible  = true
+    TweenService:Create(Main, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size     = UDim2.new(0, 300, 0, 370),
+        Position = UDim2.new(0.5, -150, 0.5, -185),
+    }):Play()
+    TweenService:Create(blur, TweenInfo.new(0.3), {Size = 8}):Play()
+end
+
+local function closeMenu()
+    menuOpen = false
+    TweenService:Create(Main, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Size     = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+    }):Play()
+    TweenService:Create(blur, TweenInfo.new(0.25), {Size = 0}):Play()
+    task.delay(0.2, function() Main.Visible = false end)
+end
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.RightShift then
-        menuOpen = not menuOpen
-        if menuOpen then
-            Main.Size     = UDim2.new(0, 0, 0, 0)
-            Main.Position = UDim2.new(0.5, 0, 0.5, 0)
-            Main.Visible  = true
-            TweenService:Create(Main, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size     = UDim2.new(0, 300, 0, 340),
-                Position = UDim2.new(0.5, -150, 0.5, -170),
-            }):Play()
-            TweenService:Create(blur, TweenInfo.new(0.3), { Size = 8 }):Play()
-        else
-            TweenService:Create(Main, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                Size     = UDim2.new(0, 0, 0, 0),
-                Position = UDim2.new(0.5, 0, 0.5, 0),
-            }):Play()
-            TweenService:Create(blur, TweenInfo.new(0.25), { Size = 0 }):Play()
-            task.delay(0.2, function() Main.Visible = false end)
-        end
+        if menuOpen then closeMenu() else openMenu() end
     end
 end)
-
-print("[Phantom] Loaded — RightShift to open menu")
