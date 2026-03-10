@@ -1,3 +1,4 @@
+```lua
 local RunService = game:GetService('RunService')
 local Players = game:GetService('Players')
 local UserInputService = game:GetService('UserInputService')
@@ -498,4 +499,98 @@ local function makeTargetPicker(order)
     row.Size             = UDim2.new(1, -4, 0, 50)
     row.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     row.BorderSizePixel  = 0
-    ro
+    row.LayoutOrder      = order
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
+
+    local iconLbl = Instance.new("TextLabel", row)
+    iconLbl.Size                = UDim2.new(0, 38, 0, 26)
+    iconLbl.BackgroundTransparency = 1
+    iconLbl.Text                = "🎯"
+    iconLbl.TextSize             = 16
+    iconLbl.Font                 = Enum.Font.GothamBold
+    iconLbl.TextColor3           = Color3.fromRGB(190, 140, 255)
+
+    local nameLbl = Instance.new("TextLabel", row)
+    nameLbl.Size                = UDim2.new(1, -50, 0, 26)
+    nameLbl.Position            = UDim2.new(0, 38, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text                = "Aim Target"
+    nameLbl.TextColor3          = Color3.fromRGB(215, 215, 230)
+    nameLbl.Font                = Enum.Font.Gotham
+    nameLbl.TextSize             = 13
+    nameLbl.TextXAlignment       = Enum.TextXAlignment.Left
+
+    local btnHolder = Instance.new("Frame", row)
+    btnHolder.Size                  = UDim2.new(1, -16, 0, 24)
+    btnHolder.Position              = UDim2.new(0, 8, 0, 24)
+    btnHolder.BackgroundTransparency = 1
+
+    local UIL = Instance.new("UIListLayout", btnHolder)
+    UIL.FillDirection = Enum.FillDirection.Horizontal
+    UIL.Padding       = UDim.new(0, 6)
+
+    local buttons = {}
+    local function makeBtn(label, targetKey)
+        local btn = Instance.new("TextButton", btnHolder)
+        btn.Size             = UDim2.new(0.5, -3, 1, 0)
+        btn.BackgroundColor3 = Settings.aimTarget == targetKey
+            and Color3.fromRGB(140, 35, 220) or Color3.fromRGB(32, 32, 45)
+        btn.BorderSizePixel  = 0
+        btn.Text             = label
+        btn.TextColor3       = Color3.fromRGB(225, 225, 240)
+        btn.Font             = Enum.Font.GothamBold
+        btn.TextSize         = 11
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+        buttons[targetKey] = btn
+
+        btn.MouseButton1Click:Connect(function()
+            Settings.aimTarget = targetKey
+            for k, b in pairs(buttons) do
+                TweenService:Create(b, TweenInfo.new(0.15), {
+                    BackgroundColor3 = k == targetKey
+                        and Color3.fromRGB(140, 35, 220) or Color3.fromRGB(32, 32, 45)
+                }):Play()
+            end
+        end)
+    end
+
+    makeBtn("HEAD", "Head")
+    makeBtn("BODY", "HumanoidRootPart")
+    return row
+end
+
+-- ── Build UI ──────────────────────────────────────────────
+makeToggle("👁",  "ESP Boxes",    "espEnabled",    1)
+makeToggle("🖱",  "Aimbot",       "aimbotEnabled", 2)
+makeToggle("⚔",  "Auto Attack",  "autoAttack",    3)
+makeToggle("🛡",  "Team Check",   "teamCheck",     4)
+makeSlider("🔵",  "FOV",          "fov",  30, 500, 5)
+makeTargetPicker(6)
+
+-- ── Menu toggle ───────────────────────────────────────────
+local menuOpen = false
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        menuOpen = not menuOpen
+        if menuOpen then
+            Main.Size     = UDim2.new(0, 0, 0, 0)
+            Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+            Main.Visible  = true
+            TweenService:Create(Main, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size     = UDim2.new(0, 300, 0, 340),
+                Position = UDim2.new(0.5, -150, 0.5, -170),
+            }):Play()
+            TweenService:Create(blur, TweenInfo.new(0.3), { Size = 8 }):Play()
+        else
+            TweenService:Create(Main, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                Size     = UDim2.new(0, 0, 0, 0),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+            }):Play()
+            TweenService:Create(blur, TweenInfo.new(0.25), { Size = 0 }):Play()
+            task.delay(0.2, function() Main.Visible = false end)
+        end
+    end
+end)
+
+print("[Phantom] Loaded — RightShift to open menu")
