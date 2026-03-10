@@ -519,4 +519,142 @@ local function makeTargetSelector(order)
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
 
     local ico = Instance.new("TextLabel", row)
-    ico.Size           
+    ico.Size           = UDim2.new(0, 36, 0, 28)
+    ico.BackgroundTransparency = 1
+    ico.Text            = "🎯"
+    ico.TextSize        = 18
+    ico.Font            = Enum.Font.GothamBold
+    ico.TextColor3      = Color3.fromRGB(200,150,255)
+
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size            = UDim2.new(1, -50, 0, 28)
+    lbl.Position        = UDim2.new(0, 36, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text            = "Aim Target"
+    lbl.TextColor3      = Color3.fromRGB(220,220,235)
+    lbl.Font            = Enum.Font.Gotham
+    lbl.TextSize        = 13
+    lbl.TextXAlignment  = Enum.TextXAlignment.Left
+
+    local btnContainer = Instance.new("Frame", row)
+    btnContainer.Size             = UDim2.new(1, -16, 0, 26)
+    btnContainer.Position         = UDim2.new(0, 8, 0, 24)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.BorderSizePixel  = 0
+
+    local UILList = Instance.new("UIListLayout", btnContainer)
+    UILList.FillDirection = Enum.FillDirection.Horizontal
+    UILList.Padding       = UDim.new(0, 6)
+
+    local function makeBtn(label, targetKey)
+        local btn = Instance.new("TextButton", btnContainer)
+        btn.Size            = UDim2.new(0.5, -3, 1, 0)
+        btn.BackgroundColor3 = Settings.aimTarget == targetKey and Color3.fromRGB(140,40,220) or Color3.fromRGB(35,35,48)
+        btn.BorderSizePixel = 0
+        btn.Text            = label
+        btn.TextColor3      = Color3.fromRGB(230,230,245)
+        btn.Font            = Enum.Font.GothamBold
+        btn.TextSize        = 12
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+        btn.MouseButton1Click:Connect(function()
+            Settings.aimTarget = targetKey
+            for _, child in ipairs(btnContainer:GetChildren()) do
+                if child:IsA("TextButton") then
+                    TweenService:Create(child, TweenInfo.new(0.15), {
+                        BackgroundColor3 = Color3.fromRGB(35,35,48)
+                    }):Play()
+                end
+            end
+            TweenService:Create(btn, TweenInfo.new(0.15), {
+                BackgroundColor3 = Color3.fromRGB(140,40,220)
+            }):Play()
+        end)
+        return btn
+    end
+
+    makeBtn("HEAD", "Head")
+    makeBtn("BODY", "HumanoidRootPart")
+
+    return row
+end
+
+-- ── build sections ────────────────────────────────────────
+makeSection("ESP")
+makeToggle("ESP Boxes",      "👁",  "espEnabled",   1)
+
+makeSection("AIMBOT")
+makeToggle("Aimbot",         "🖱",  "aimbotEnabled",2)
+makeToggle("Auto Attack",    "⚔",  "autoAttack",   3)
+makeToggle("Team Check",     "🛡",  "teamCheck",    4)
+makeSlider("FOV Radius",     "🔵",  "fov",  30, 500, 5)
+makeSlider("Smoothing",      "〰",  "smoothing", 1, 30, 6)   -- stored ×10
+makeTargetSelector(7)
+
+-- Fix smoothing slider: store as 1–30 → divide by 100 when using
+-- We override: store real value in fov, and smoothing 1–30 as 1–30, applied as /100
+-- Patch aimAtTarget to use Settings.smoothing/100
+local _origSmoothing = Settings.smoothing
+-- Use smoothing as 1-30 mapped to 0.01-0.30
+local function getSmoothingValue()
+    return Settings.smoothing / 100
+end
+
+-- Patch aimAtTarget
+local function aimAtTarget2(target)
+    if not target or not target.Character then return end
+    local part = target.Character:FindFirstChild(Settings.aimTarget)
+                 or target.Character:FindFirstChild("HumanoidRootPart")
+    if not part then return end
+    camera.CFrame = camera.CFrame:Lerp(
+        CFrame.new(camera.CFrame.Position, part.Position),
+        getSmoothingValue()
+    )
+end
+
+-- Replace aimAtTarget in renderConn with aimAtTarget2
+renderConn:Disconnect()
+isAttacking = false
+renderConn = RunService.RenderStepped:Connect(function()
+    if UserInputService:IsKeyDown(Enum.KeyCode.Delete) then
+        renderConn:Disconnect(); FOVring:Remove(); return
+    end
+    local pressing = Settings.autoAttack
+                     or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+    if pressing and Settings.aimbotEnabled then
+        local target = getClosest()
+        if target then
+            aimAtTarget2(target)
+            if isVisible(target) then
+                if not isAttacking then mouse1press(); isAttacking = true end
+            else
+                if isAttacking then mouse1release(); isAttacking = false end
+            end
+        else
+            if isAttacking then mouse1release(); isAttacking = false end
+        end
+    else
+        if isAttacking then mouse1release(); isAttacking = false end
+    end
+end)
+
+-- ── menu toggle ───────────────────────────────────────────
+local menuOpen = false
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        menuOpen = not menuOpen
+        Main.Visible = menuOpen
+        TweenService:Create(blur, TweenInfo.new(0.3), { Size = menuOpen and 8 or 0 }):Play()
+        if menuOpen then
+            Main.Size = UDim2.new(0, 0, 0, 0)
+            Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+            TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size     = UDim2.new(0, 340, 0, 420),
+                Position = UDim2.new(0.5, -170, 0.5, -210),
+            }):Play()
+        end
+    end
+end)
+
+print("[Phantom] Loaded — RightShift to open menu")
