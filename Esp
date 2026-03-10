@@ -106,4 +106,3 @@ renderConnection = RunService.RenderStepped:Connect(function()
         end
     end
 end)
-добавь в этот скрипт математическую атаку чтоб он целился наперёд 
